@@ -13,7 +13,6 @@ Within my ADLS Gen2 account I proceed with creating a container called "mp3". To
 - Or double click the container and under "Settings" click the the "Shared access tokens"
 
 From there select the signing method, in my case I will be using the "Account key" and proceed with setting the permissions on the SAS token. For the purpose of uploading files to the container within the ADLS account, "Write" permission will be sufficient.  
-Below is a snapshot of how it looks:
 
 
 When you specify a datetime range on how long you want the permission to be active associated with the SAS token, proceed with clicking the blue button "Generate SAS token and URL" and copy the "Blob SAS Token". That token will be placed in a config file 
@@ -87,3 +86,36 @@ def download_mp3(url, save_path):
     else:
         print(f"Failed to download MP3. Status code: {response.status_code}")
 ```
+
+
+## Part3: Uploading recently downloaded mp3 file sets to ADLS Gen2 Storage
+So for my demo, I opted to copy over the entire directory containing the newly downloaded mp3 file sets into my ADLS account. I utilize a function called **copy_local_folder_to_adls_gen2** to handle this operation. Here's the code snippet:
+
+```py
+def copy_local_folder_to_adls_gen2(storage_account_name, sas_token, file_system_name, local_folder_path, destination_folder_path):
+    service_client = DataLakeServiceClient(account_url=f"https://{storage_account_name}.dfs.core.windows.net?{sas_token}")
+
+    file_system_client = service_client.get_file_system_client(file_system_name)
+
+    local_folder_name = os.path.basename(local_folder_path)
+
+    destination_folder_path = os.path.join(destination_folder_path, local_folder_name)
+    destination_folder_client = file_system_client.get_directory_client(destination_folder_path)
+    destination_folder_client.create_directory()
+
+    for root, _, files in os.walk(local_folder_path):
+        
+        for file_name in files:
+            local_file_path = os.path.join(root, file_name)
+            relative_file_path = os.path.relpath(local_file_path, local_folder_path)
+            destination_file_path = os.path.join(destination_folder_path, relative_file_path)
+            
+            file_client = file_system_client.get_file_client(destination_file_path)
+
+            with open(local_file_path, "rb") as data:
+                file_client.upload_data(data, overwrite=True)
+
+    print("Operation was successful. Folder and its contents copied to ADLS Gen2.")
+```
+
+Once executed it will copy the local directory containing the files over into ADLS Gen2 Storage account. 
